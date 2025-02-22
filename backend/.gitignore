@@ -12,3 +12,5 @@ db.sqlite3
 
 # Ignore system files
 .DS_Store
+staticfiles/
+media/

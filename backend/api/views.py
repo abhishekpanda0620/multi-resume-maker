@@ -1,4 +1,5 @@
 import os
+import uuid
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -26,65 +27,141 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def customize(self, request):
-        master_resume_id = request.data.get('master_resume_id')
-        job_description_id = request.data.get('job_description_id')
-        
         try:
-            master_resume = MasterResume.objects.get(id=master_resume_id)
-            job_description = JobDescription.objects.get(id=job_description_id)
-        except MasterResume.DoesNotExist:
-            return Response({'error': 'Master resume not found'}, status=status.HTTP_404_NOT_FOUND)
-        except JobDescription.DoesNotExist:
-            return Response({'error': 'Job description not found'}, status=status.HTTP_404_NOT_FOUND)
+            # Get the uploaded file and job description from request
+            master_resume_file = request.FILES.get('master_resume')
+            job_description = request.data.get('job_description')
 
-        # Extract text from PDF files
-        master_resume_text = self.extract_text_from_pdf(master_resume.resume_file.path)
-        job_description_text = self.extract_text_from_pdf(job_description.description_file.path)
+            if not master_resume_file:
+                return Response(
+                    {'error': 'No resume file provided'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not job_description:
+                return Response(
+                    {'error': 'No job description provided'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # AI-powered customization logic
-        customized_content = self.ai_customize(master_resume_text, job_description_text)
+            # Save the master resume temporarily
+            temp_path = default_storage.save(
+                f'temp/{master_resume_file.name}',
+                master_resume_file
+            )
+            temp_file_path = os.path.join(settings.MEDIA_ROOT, temp_path)
 
-        # Create a new PDF from the customized content
-        customized_resume_path = self.create_pdf_from_text(customized_content)
+            # Extract text from PDF file
+            master_resume_text = self.extract_text_from_pdf(temp_file_path)
 
-        # Save the customized resume to the database
-        with open(customized_resume_path, 'rb') as f:
-            customized_resume_file = ContentFile(f.read())
-            customized_resume = CustomizedResume.objects.create(
-                user=request.user,
-                master_resume=master_resume,
-                job_description=job_description,
-                customized_resume_file=customized_resume_file
+            # AI-powered customization logic
+            customized_content = self.ai_customize(master_resume_text, job_description)
+
+            # Create a new PDF from the customized content
+            customized_resume_path = self.create_pdf_from_text(customized_content)
+
+            # Create a new master resume record
+            master_resume = MasterResume.objects.create(
+                resume_file=master_resume_file
             )
 
-        serializer = self.get_serializer(customized_resume)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Create a new job description record
+            job_description_obj = JobDescription.objects.create(
+                description_text=job_description
+            )
+
+            # Save the customized resume to the database
+            with open(customized_resume_path, 'rb') as f:
+                customized_resume_file = ContentFile(f.read())
+                filename = f'customized_resume_{master_resume.id}.pdf'
+                customized_resume = CustomizedResume.objects.create(
+                    master_resume=master_resume,
+                    job_description=job_description_obj
+                )
+                customized_resume.customized_resume_file.save(
+                    filename, 
+                    customized_resume_file
+                )
+
+            # Clean up temporary files
+            os.remove(temp_file_path)
+            os.remove(customized_resume_path)
+
+            return Response({
+                'customized_resume_file': customized_resume.customized_resume_file.url,
+                'message': 'Resume customized successfully'
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     def extract_text_from_pdf(self, pdf_path):
-        reader = PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
+        try:
+            reader = PdfReader(pdf_path)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+            return text
+        except Exception as e:
+            raise Exception(f"Error extracting text from PDF: {str(e)}")
 
     def ai_customize(self, master_resume_text, job_description_text):
-        # Use Google Gemini AI to customize the resume
-        client = genai.Client(api_key=GEMINI_AI_KEY)
-        prompt = f"Customize the following resume text based on the job description provided:\n\nResume:\n{master_resume_text}\n\nJob Description:\n{job_description_text}"
-        response = client.models.generate_content(
-            model='gemini-2.0-flash', 
-            contents=prompt
-        )
-        
-        # Extract the customized content from the response
-        customized_content = response['choices'][0]['text']
-        return customized_content
+        try:
+            # Use Google Gemini AI to customize the resume
+            client = genai.Client(api_key=settings.GEMINI_AI_KEY)
+            prompt = f"""
+            You are a professional resume customizer. Your task is to customize the following resume 
+            to match the job description provided. Keep the formatting and structure similar but 
+            optimize the content to highlight relevant skills and experiences.
+
+            Resume:
+            {master_resume_text}
+
+            Job Description:
+            {job_description_text}
+
+            Please provide the customized resume content maintaining a professional format.
+            """
+            
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt
+            )
+            
+            if not response or not response.text:
+                raise Exception("Failed to generate customized content")
+
+            return response.text
+            
+        except Exception as e:
+            raise Exception(f"Error in AI customization: {str(e)}")
 
     def create_pdf_from_text(self, text):
-        writer = PdfWriter()
-        writer.add_page(writer.add_blank_page(width=210, height=297))  # A4 size
-        writer.pages[0].insert_text(text)
-        customized_resume_path = os.path.join(settings.MEDIA_ROOT, 'customized_resumes', 'customized_resume.pdf')
-        with open(customized_resume_path, 'wb') as f:
-            writer.write(f)
-        return customized_resume_path
+        try:
+            writer = PdfWriter()
+            writer.add_page(writer.add_blank_page(width=612, height=792))  # US Letter size
+            
+            # Create a unique filename
+            filename = f'customized_resume_{uuid.uuid4()}.pdf'
+            output_path = os.path.join(settings.MEDIA_ROOT, 'customized_resumes', filename)
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Write content to PDF
+            writer.pages[0].insert_text(
+                text=text,
+                x=50,  # Left margin
+                y=750,  # Top margin
+                font_size=12
+            )
+            
+            with open(output_path, 'wb') as f:
+                writer.write(f)
+            
+            return output_path
+            
+        except Exception as e:
+            raise Exception(f"Error creating PDF: {str(e)}")

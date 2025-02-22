@@ -11,16 +11,19 @@ class MasterResume(models.Model):
 class JobDescription(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     job_title = models.CharField(max_length=255)
-    description_file = models.FileField(upload_to='job_descriptions/')
+    description_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.job_title} - {self.user.username}"
+        return f"Job Description {self.id}"
+
+    class Meta:
+        ordering = ['-created_at']
 
 class CustomizedResume(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     master_resume = models.ForeignKey(MasterResume, on_delete=models.CASCADE)
-    job_description = models.ForeignKey(JobDescription, on_delete=models.CASCADE)
+    job_description = models.ForeignKey(JobDescription, null=True, blank=True, on_delete=models.CASCADE)
     customized_resume_file = models.FileField(upload_to='customized_resumes/')
     created_at = models.DateTimeField(auto_now_add=True)
 

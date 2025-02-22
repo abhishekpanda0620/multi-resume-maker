@@ -9,4 +9,8 @@ router.register(r'customized-resumes', CustomizedResumeViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Add custom action URL pattern
+    path('customized-resumes/customize/', 
+         CustomizedResumeViewSet.as_view({'post': 'customize'}), 
+         name='customize-resume'),
 ]
