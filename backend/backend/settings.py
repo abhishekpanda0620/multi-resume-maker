@@ -11,6 +11,13 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Fetch the Gemini AI key from environment variables
+GEMINI_AI_KEY = os.getenv('GEMINI_AI_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -81,9 +88,7 @@ DATABASES = {
         'NAME': 'resume_db',
         'USER': 'postgres',
         'PASSWORD': 'postgres',
-        'HOST': '0.0.0.0',(venv) ubuntu@AbhishekPanda:~/project/multi-resume-maker/backend$ docker run postgres
-[Sat Feb 22 17:49:19 2025] PHP 7.4.33 Development Server (http://[::]:8080) started
-
+        'HOST': '0.0.0.0',
         'PORT': '5432',
     }
 }
