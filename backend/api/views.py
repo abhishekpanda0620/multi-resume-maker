@@ -1,5 +1,6 @@
 import os
 import uuid
+import logging
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -11,7 +12,16 @@ from PyPDF2 import PdfReader, PdfWriter
 from .models import MasterResume, JobDescription, CustomizedResume
 from .serializers import MasterResumeSerializer, JobDescriptionSerializer, CustomizedResumeSerializer
 from google import genai
+from django.core.exceptions import ValidationError
+from rest_framework.exceptions import APIException
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import simpleSplit
+import textwrap
 
+logger = logging.getLogger('resume_customizer')
 
 class MasterResumeViewSet(viewsets.ModelViewSet):
     queryset = MasterResume.objects.all()
@@ -27,75 +37,110 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def customize(self, request):
+        logger.info(f"Starting resume customization process for user: {request.user}")
+        temp_files = []
+
         try:
-            # Get the uploaded file and job description from request
+            # Validate input
             master_resume_file = request.FILES.get('master_resume')
             job_description = request.data.get('job_description')
 
             if not master_resume_file:
+                logger.error("No resume file provided in request")
                 return Response(
                     {'error': 'No resume file provided'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
             if not job_description:
+                logger.error("No job description provided in request")
                 return Response(
                     {'error': 'No job description provided'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Save the master resume temporarily
-            temp_path = default_storage.save(
-                f'temp/{master_resume_file.name}',
-                master_resume_file
-            )
-            temp_file_path = os.path.join(settings.MEDIA_ROOT, temp_path)
+            try:
+                temp_path = default_storage.save(
+                    f'temp/{master_resume_file.name}',
+                    master_resume_file
+                )
+                temp_file_path = os.path.join(settings.MEDIA_ROOT, temp_path)
+                temp_files.append(temp_file_path)
+                logger.info(f"Temporary file saved: {temp_file_path}")
+            except Exception as e:
+                logger.error(f"Error saving temporary file: {str(e)}")
+                raise ValidationError(f"Error saving resume file: {str(e)}")
 
             # Extract text from PDF file
-            master_resume_text = self.extract_text_from_pdf(temp_file_path)
+            try:
+                master_resume_text = self.extract_text_from_pdf(temp_file_path)
+                logger.info("Successfully extracted text from PDF")
+            except Exception as e:
+                logger.error(f"Error extracting text from PDF: {str(e)}")
+                raise ValidationError(f"Error reading PDF file: {str(e)}")
 
             # AI-powered customization logic
-            customized_content = self.ai_customize(master_resume_text, job_description)
+            try:
+                customized_content = self.ai_customize(master_resume_text, job_description)
+                logger.info("Successfully customized resume content")
+            except Exception as e:
+                logger.error(f"Error in AI customization: {str(e)}")
+                raise ValidationError(f"Error customizing resume: {str(e)}")
 
             # Create a new PDF from the customized content
-            customized_resume_path = self.create_pdf_from_text(customized_content)
+            try:
+                customized_resume_path = self.create_pdf_from_text(customized_content)
+                temp_files.append(customized_resume_path)
+                logger.info(f"Created customized PDF: {customized_resume_path}")
+            except Exception as e:
+                logger.error(f"Error creating PDF: {str(e)}")
+                raise ValidationError(f"Error creating customized PDF: {str(e)}")
 
-            # Create a new master resume record
-            master_resume = MasterResume.objects.create(
-                resume_file=master_resume_file
-            )
-
-            # Create a new job description record
-            job_description_obj = JobDescription.objects.create(
-                description_text=job_description
-            )
-
-            # Save the customized resume to the database
-            with open(customized_resume_path, 'rb') as f:
-                customized_resume_file = ContentFile(f.read())
-                filename = f'customized_resume_{master_resume.id}.pdf'
-                customized_resume = CustomizedResume.objects.create(
-                    master_resume=master_resume,
-                    job_description=job_description_obj
-                )
-                customized_resume.customized_resume_file.save(
-                    filename, 
-                    customized_resume_file
-                )
-
-            # Clean up temporary files
-            os.remove(temp_file_path)
-            os.remove(customized_resume_path)
+            # Save to database
+            try:
+                master_resume = MasterResume.objects.create(resume_file=master_resume_file,user_id=1)
+                job_description_obj = JobDescription.objects.create(description_text=job_description)
+                
+                with open(customized_resume_path, 'rb') as f:
+                    customized_resume_file = ContentFile(f.read())
+                    filename = f'customized_resume_{master_resume.id}.pdf'
+                    customized_resume = CustomizedResume.objects.create(
+                        master_resume=master_resume,
+                        job_description=job_description_obj,
+                        user_id=1
+                    )
+                    customized_resume.customized_resume_file.save(filename, customized_resume_file)
+                
+                logger.info(f"Successfully saved customized resume with ID: {customized_resume.id}")
+            except Exception as e:
+                logger.error(f"Error saving to database: {str(e)}")
+                raise ValidationError(f"Error saving customized resume: {str(e)}")
 
             return Response({
                 'customized_resume_file': customized_resume.customized_resume_file.url,
                 'message': 'Resume customized successfully'
             }, status=status.HTTP_201_CREATED)
 
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except APIException as e:
+            return Response({'error': str(e)}, status=e.status_code)
         except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+            return Response(
+                {'error': 'An unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                        logger.info(f"Cleaned up temporary file: {temp_file}")
+                except Exception as e:
+                    logger.error(f"Error cleaning up file {temp_file}: {str(e)}")
 
     def extract_text_from_pdf(self, pdf_path):
         try:
@@ -140,9 +185,6 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
 
     def create_pdf_from_text(self, text):
         try:
-            writer = PdfWriter()
-            writer.add_page(writer.add_blank_page(width=612, height=792))  # US Letter size
-            
             # Create a unique filename
             filename = f'customized_resume_{uuid.uuid4()}.pdf'
             output_path = os.path.join(settings.MEDIA_ROOT, 'customized_resumes', filename)
@@ -150,18 +192,42 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
             # Ensure directory exists
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
-            # Write content to PDF
-            writer.pages[0].insert_text(
-                text=text,
-                x=50,  # Left margin
-                y=750,  # Top margin
-                font_size=12
-            )
+            # Create the PDF
+            c = canvas.Canvas(output_path, pagesize=letter)
+            width, height = letter
             
-            with open(output_path, 'wb') as f:
-                writer.write(f)
+            # Set font and size
+            c.setFont("Helvetica", 12)
             
+            # Split text into lines that fit the page width
+            y = height - 50  # Start 50 points from top
+            margin = 50
+            line_height = 14
+            available_width = width - 2 * margin
+            
+            # Split text into paragraphs
+            paragraphs = text.split('\n')
+            
+            for paragraph in paragraphs:
+                # Wrap text to fit page width
+                lines = textwrap.wrap(paragraph, width=80)  # Approximate characters per line
+                
+                for line in lines:
+                    if y < 50:  # If we're near the bottom, start a new page
+                        c.showPage()
+                        y = height - 50
+                        c.setFont("Helvetica", 12)
+                    
+                    c.drawString(margin, y, line)
+                    y -= line_height
+                
+                # Add space between paragraphs
+                y -= line_height
+            
+            c.save()
+            logger.info(f"Successfully created PDF at: {output_path}")
             return output_path
             
         except Exception as e:
+            logger.error(f"Error creating PDF: {str(e)}", exc_info=True)
             raise Exception(f"Error creating PDF: {str(e)}")
