@@ -51,6 +51,7 @@ To start the application, run the following commands in separate terminals:
 cd frontend
 npm start
 ```
+Then open your browser and navigate to `http://localhost:3000`.
 
 ### Backend
 
@@ -60,7 +61,6 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 python manage.py runserver
 ```
 
-Then open your browser and navigate to `http://localhost:3000`.
 
 ## Contributing
 
