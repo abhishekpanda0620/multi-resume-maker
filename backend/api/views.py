@@ -229,7 +229,7 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
             Job Description:
             {job_description_text}
 
-            Please provide the customized resume content maintaining a professional format Don't return any extra text.
+            Please provide the customized resume content maintaining a professional format THE Font, style, bullets and hyperlinks should be same as before Don't return any extra text.
             """
             
             response = client.models.generate_content(
