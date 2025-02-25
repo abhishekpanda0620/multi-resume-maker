@@ -27,6 +27,7 @@ cd multi-resume-maker
 ```bash
 cd frontend
 npm install
+cp env.example .env.local
 ```
 
 ### Backend
@@ -49,7 +50,7 @@ To start the application, run the following commands in separate terminals:
 
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
 Then open your browser and navigate to `http://localhost:3000`.
 
@@ -61,7 +62,6 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 python manage.py runserver
 ```
 
-
 ## Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request.
@@ -69,3 +69,11 @@ Contributions are welcome! Please fork the repository and submit a pull request.
 ## License
 
 This project is licensed under the MIT License.
+
+## Support
+
+If you encounter any issues or have questions, feel free to open an issue on the GitHub repository or contact the maintainers.
+
+## Acknowledgements
+
+We would like to thank all the contributors and the open-source community for their support and contributions to this project.
