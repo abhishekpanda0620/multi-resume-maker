@@ -6,6 +6,7 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { toast } from "react-toastify";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,9 +21,11 @@ export default function LoginPage() {
         password,
       });
       if (response.status === 200) {
-        router.push("/dashboard"); // Redirect on success
+        const accessToken = response.data.accessToken;
+        localStorage.setItem("accessToken", accessToken);
+        router.push("/home"); // Redirect on success
       } else {
-        alert("Login failed. Please check your credentials.");
+        toast("Login failed. Please check your credentials.");
       }
     } catch (error) {
       alert("An error occurred. Please try again.");

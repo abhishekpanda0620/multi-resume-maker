@@ -52,12 +52,14 @@ export default function Home() {
     formData.append("job_description", jobDescription);
   
     try {
+    const accessToken = localStorage.getItem("accessToken");
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/customized-resumes/customize/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/customized-resumes/customize`,
         formData,
         {
           headers: {
             "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${accessToken}`
           },
           // Add timeout and response type
           timeout: 30000,
@@ -66,7 +68,7 @@ export default function Home() {
       );
   
       if (response.data && response.data.customized_resume_file) {
-        setCustomizedResumeLink(response.data.customized_resume_file);
+        setCustomizedResumeLink(process.env.NEXT_PUBLIC_MEDIA_URL+response.data.customized_resume_file);
       } else {
         throw new Error('Invalid response format from server');
       }

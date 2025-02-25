@@ -1,18 +1,18 @@
 "use client";
-import { useEffect } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const Page = () => {
-  const history = useHistory();
+  const router = useRouter();
   const isAuthenticated = false; // Replace with actual authentication logic
 
   useEffect(() => {
     if (isAuthenticated) {
-      history.push('/home');
+      router.push("/home");
     } else {
-      history.push('/login');
+      router.push("/login");
     }
-  }, [isAuthenticated, history]);
+  }, [isAuthenticated, router]);
 
   return null;
 };

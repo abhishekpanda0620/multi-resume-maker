@@ -6,6 +6,7 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { ToastContainer, toast } from 'react-toastify';
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -19,24 +20,26 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      alert("Passwords do not match.");
+      toast("Passwords do not match.");
       return;
     }
     try {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/register`, {
         username,
         email,
-        firstName,
-        lastName,
+        first_name:firstName,
+        last_name:lastName,
         password,
       });
       if (response.status === 201) {
-        router.push("/dashboard");
+        const accessToken = response.data.accessToken;
+        localStorage.setItem("accessToken", accessToken);
+        router.push("/home");
       } else {
-        alert("Registration failed. Please try again.");
+        toast("Registration failed. Please try again.");
       }
     } catch (error) {
-      alert("An error occurred during registration. Please try again later.");
+      toast("An error occurred during registration. Please try again later.");
     }
   };
 
