@@ -10,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from PyPDF2 import PdfReader, PdfWriter
 from .models import MasterResume, JobDescription, CustomizedResume
-from .serializers import MasterResumeSerializer, JobDescriptionSerializer, CustomizedResumeSerializer
+from .serializers import MasterResumeSerializer, JobDescriptionSerializer, CustomizedResumeSerializer, UserSerializer, RegisterSerializer
 from google import genai
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import APIException
@@ -19,10 +19,69 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import simpleSplit
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status, generics
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import AllowAny
+
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+
 import textwrap
 
 logger = logging.getLogger('resume_customizer')
 
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return Response({"message": "Login successful"}, status=status.HTTP_200_OK)
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logout(request)
+        return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()  # This returns the User instance
+
+        # Generate tokens for the new user
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+
+        # Prepare the response data
+        user_data = serializer.data
+        token_data = {
+            'accessToken': access_token,
+            'refreshToken': str(refresh)
+        }
+        response_data = {**user_data, **token_data}
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class UserView(generics.RetrieveUpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
 class MasterResumeViewSet(viewsets.ModelViewSet):
     queryset = MasterResume.objects.all()
     serializer_class = MasterResumeSerializer
@@ -34,11 +93,14 @@ class JobDescriptionViewSet(viewsets.ModelViewSet):
 class CustomizedResumeViewSet(viewsets.ModelViewSet):
     queryset = CustomizedResume.objects.all()
     serializer_class = CustomizedResumeSerializer
-
+    permission_classes = [IsAuthenticated]
     @action(detail=False, methods=['post'])
     def customize(self, request):
         logger.info(f"Starting resume customization process for user: {request.user}")
         temp_files = []
+         # If the user is not authenticated (shouldn't happen due to permissions), you could check:
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             # Validate input
@@ -99,8 +161,8 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
 
             # Save to database
             try:
-                master_resume = MasterResume.objects.create(resume_file=master_resume_file,user_id=1)
-                job_description_obj = JobDescription.objects.create(description_text=job_description)
+                master_resume = MasterResume.objects.create(resume_file=master_resume_file,user = request.user)
+                job_description_obj = JobDescription.objects.create(description_text=job_description, user = request.user)
                 
                 with open(customized_resume_path, 'rb') as f:
                     customized_resume_file = ContentFile(f.read())
@@ -108,7 +170,7 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
                     customized_resume = CustomizedResume.objects.create(
                         master_resume=master_resume,
                         job_description=job_description_obj,
-                        user_id=1
+                        user = request.user
                     )
                     customized_resume.customized_resume_file.save(filename, customized_resume_file)
                 
@@ -167,7 +229,7 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
             Job Description:
             {job_description_text}
 
-            Please provide the customized resume content maintaining a professional format.
+            Please provide the customized resume content maintaining a professional format Don't return any extra text.
             """
             
             response = client.models.generate_content(
