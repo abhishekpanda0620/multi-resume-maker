@@ -9,8 +9,10 @@ import { motion } from "framer-motion";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
-  const [email, setEmail]     = useState("");
-  const [password, setPassword]   = useState("");
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const router = useRouter();
 
@@ -24,9 +26,11 @@ export default function RegisterPage() {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/register`, {
         username,
         email,
+        firstName,
+        lastName,
         password,
       });
-      if (response.status === 201) { // Assuming 201 Created on success
+      if (response.status === 201) {
         router.push("/dashboard");
       } else {
         alert("Registration failed. Please try again.");
@@ -46,12 +50,12 @@ export default function RegisterPage() {
         className="absolute inset-0 bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 animate-gradient"
       />
 
-      {/* Glassmorphism Card */}
+      {/* Glassmorphism Card with Responsive Margin */}
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-md p-6 bg-white/10 backdrop-blur-lg rounded-2xl shadow-lg"
+        className="relative z-10 w-full max-w-2xl mx-4 p-6 bg-white/10 backdrop-blur-lg rounded-2xl shadow-lg"
       >
         <Card>
           <CardHeader>
@@ -59,58 +63,96 @@ export default function RegisterPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-slate-600">
-                  Username:
-                </label>
-                <Input
-                  type="text"
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="mt-1"
-                />
+              {/* First Name & Last Name in one row */}
+              <div className="flex flex-col md:flex-row md:space-x-4">
+                <div className="w-full">
+                  <label htmlFor="firstName" className="block text-sm font-medium text-slate-600">
+                    First Name:
+                  </label>
+                  <Input
+                    type="text"
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div className="w-full">
+                  <label htmlFor="lastName" className="block text-sm font-medium text-slate-600">
+                    Last Name:
+                  </label>
+                  <Input
+                    type="text"
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-600">
-                  Email:
-                </label>
-                <Input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="mt-1"
-                />
+
+              {/* Username & Email in one row */}
+              <div className="flex flex-col md:flex-row md:space-x-4">
+                <div className="w-full">
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-600">
+                    Username:
+                  </label>
+                  <Input
+                    type="text"
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div className="w-full">
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-600">
+                    Email:
+                  </label>
+                  <Input
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-600">
-                  Password:
-                </label>
-                <Input
-                  type="password"
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="mt-1"
-                />
+
+              {/* Password & Confirm Password in one row */}
+              <div className="flex flex-col md:flex-row md:space-x-4">
+                <div className="w-full">
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-600">
+                    Password:
+                  </label>
+                  <Input
+                    type="password"
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div className="w-full">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-600">
+                    Confirm Password:
+                  </label>
+                  <Input
+                    type="password"
+                    id="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="mt-1"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-600">
-                  Confirm Password:
-                </label>
-                <Input
-                  type="password"
-                  id="confirmPassword"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="mt-1"
-                />
-              </div>
+
               <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
                 Register
               </Button>
@@ -130,9 +172,15 @@ export default function RegisterPage() {
       {/* Background Animation CSS */}
       <style jsx>{`
         @keyframes gradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
         }
         .animate-gradient {
           background-size: 300% 300%;
