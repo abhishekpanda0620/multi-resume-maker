@@ -219,18 +219,26 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
             # Use Google Gemini AI to customize the resume
             client = genai.Client(api_key=settings.GEMINI_AI_KEY)
             prompt = f"""
-            You are a professional resume customizer. Your task is to customize the following resume 
-            to match the job description provided. Keep the formatting and structure similar but 
-            optimize the content to highlight relevant skills and experiences.
+                    You are a professional resume customizer. Your task is to modify the given resume to match the job description while **strictly preserving** the formatting, including:
 
-            Resume:
-            {master_resume_text}
+                    - **Bold**, *Italic*, and Underline styles
+                    - Font size, font family, font weight
+                    - Bullets (•, ○, →)
+                    - Hyperlinks
+                    - Line spacing and indentation
 
-            Job Description:
-            {job_description_text}
+                    Do NOT modify the structure or remove any sections. Only rewrite the content to emphasize relevant skills and experiences.
 
-            Please provide the customized resume content maintaining a professional format THE Font, style, bullets and hyperlinks should be same as before Don't return any extra text.
-            """
+                    ### **Original Resume (Preserve Format)**
+                    {master_resume_text}
+
+                    ### **Job Description**
+                    {job_description_text}
+
+                    Return the **fully formatted** customized resume as raw text that can be directly converted into a PDF without any additional styling needed.
+"""
+
+
             
             response = client.models.generate_content(
                 model='gemini-2.0-flash',
