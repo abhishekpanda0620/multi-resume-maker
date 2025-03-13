@@ -107,10 +107,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'resume_db',
-        'USER': 'postgres',
-        'PASSWORD': 'Soumya@6371',
-        'HOST': '0.0.0.0',
-        'PORT': '5432',
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', 5432),
     }
 }
 
