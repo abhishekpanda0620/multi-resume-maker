@@ -1,4 +1,5 @@
 import os
+from mistralai import Mistral
 import uuid
 import logging
 from django.conf import settings
@@ -32,6 +33,11 @@ from django.contrib.auth.models import User
 import textwrap
 
 logger = logging.getLogger('resume_customizer')
+api_key = settings.MISTRAL_API_KEY
+
+# Initialize client
+client = Mistral(api_key=api_key)
+
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -205,14 +211,42 @@ class CustomizedResumeViewSet(viewsets.ModelViewSet):
                     logger.error(f"Error cleaning up file {temp_file}: {str(e)}")
 
     def extract_text_from_pdf(self, pdf_path):
+
         try:
-            reader = PdfReader(pdf_path)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
-            return text
+        # Upload the PDF file to Mistral
+            with open(pdf_path, "rb") as file:
+                uploaded_file = client.files.upload(
+                    file={
+                        "file_name": "document.pdf",
+                        "content": file.read(),
+                    },
+                    purpose="ocr"
+                )
+
+            # Get the signed URL for the uploaded file
+            signed_url = client.files.get_signed_url(file_id=uploaded_file.id, expiry=1)
+
+            # Process the uploaded file using Mistral OCR
+            ocr_response = client.ocr.process(
+                document={
+                    "type": "document_url",
+                    "document_url": signed_url.url
+                },
+                model="mistral-ocr-latest",
+                include_image_base64=True
+            )
+
+            # Extract Markdown content
+            
+            extracted_text = ""
+            for page in ocr_response.pages:
+                extracted_text += page.markdown
+
+            extracted_text = extracted_text.replace("# ", "").replace("## ", "").replace("### ", "")
+            return extracted_text
+
         except Exception as e:
-            raise Exception(f"Error extracting text from PDF: {str(e)}")
+            raise Exception(f"Error extracting text from PDF using Mistral OCR: {str(e)}")
 
     def ai_customize(self, master_resume_text, job_description_text):
         try:
